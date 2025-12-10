@@ -1,0 +1,74 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Node setup
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      # Build frontend
+      - name: Build Angular frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build --configuration production
+
+      # Build backend
+      - name: Build NestJS backend
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build
+
+      # Set up Docker (optional: login to Docker Hub if pushing)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Build frontend Docker image
+      - name: Build frontend Docker image
+        run: |
+          docker build -t mydockerhubuser/devproject-frontend:latest ./frontend
+
+      # Build backend Docker image
+      - name: Build backend Docker image
+        run: |
+          docker build -t mydockerhubuser/devproject-backend:latest ./backend
+
+      # Push images (optional, only if you use Docker Hub)
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push frontend image
+        run: docker push mydockerhubuser/devproject-frontend:latest
+
+      - name: Push backend image
+        run: docker push mydockerhubuser/devproject-backend:latest
+
+      # Deploy to Kubernetes (optional)
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: '1.27.0'
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/backend-deployment.yaml
+          kubectl apply -f k8s/frontend-deployment.yaml
+          kubectl apply -f k8s/ingress.yaml
